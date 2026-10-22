@@ -63,6 +63,24 @@ Guidance for changes in **omp Folio**, an omp `Composer Shape` plugin. Target is
 - Update README when user-facing behavior, installation, provider support, or compatibility changes. Keep it short.
 - Preserve the `omp-folio` package name and current shape id unless a migration is included.
 
+## Releasing
+
+Versioning is manual; commit messages are not parsed. `npm version` is the only version source and creates both the version commit and the annotated `v*` tag.
+
+First `0.1.0` is published manually. Before the first CI release, configure npm Trusted Publishing for `moesama228/omp-folio`, workflow `publish.yml`, with direct `npm publish` allowed. Do not add release-please or changesets.
+
+Daily release:
+
+```sh
+npm version patch
+git push --follow-tags
+```
+
+- Use `npm version minor` or `npm version major` when the change requires it; default to `patch`.
+- Run `npm version` from a clean `main`; do not manually edit `package.json` version.
+- Never create or move tags manually. The pushed tag must match `v<package.json version>`.
+- `.github/workflows/publish.yml` triggers only on `v*`, runs typecheck/tests, then publishes through npm Trusted Publishing.
+
 ## Validation
 
 Run from the repository:
