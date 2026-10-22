@@ -1,0 +1,50 @@
+{
+  "name": "omp-folio",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Folio composer: input with a quota rail and omp's native status bar",
+  "omp": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "files": [
+    "index.ts",
+    "src/editor.ts",
+    "src/quota-panel.ts",
+    "src/quota.ts",
+    "src/register.ts",
+    "src/shape.ts",
+    "src/types.ts"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "peerDependencies": {
+    "@oh-my-pi/pi-ai": ">=18.12.0",
+    "@oh-my-pi/pi-coding-agent": ">=18.12.0",
+    "@oh-my-pi/pi-tui": ">=18.12.0"
+  },
+  "devDependencies": {
+    "@oh-my-pi/pi-ai": "18.12.6",
+    "@oh-my-pi/pi-coding-agent": "18.12.6",
+    "@oh-my-pi/pi-tui": "18.12.6",
+    "@types/bun": "^1.3.0",
+    "typescript": "^5.9.3"
+  },
+  "author": "moesama228 <limeng11100@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/moesama228/omp-folio.git"
+  },
+  "license": "MIT",
+  "keywords": [
+    "oh-my-pi",
+    "omp",
+    "composer",
+    "tui",
+    "plugin",
+    "quota"
+  ]
+}
