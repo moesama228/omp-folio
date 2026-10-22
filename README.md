@@ -1,6 +1,6 @@
 # omp Folio
 
-`▎` 左侧输入 · `⏱` 订阅额度 · `💲` 余额 · `≡` 原生状态栏
+`▎` 左侧输入 · `⏱` 订阅额度 · `$` 余额 · `≡` 原生状态栏
 
 一个 omp **Composer Shape**：输入区保持 omp 原有行为，右侧只显示额度/余额，下方交还给 omp 原生状态栏。面向 omp **18.12.6** 的普通 ANSI 终端。
 
@@ -46,7 +46,7 @@ omp config set composer.shape omp-composer-folio-gutter
 ## 布局
 
 - `▎` **输入**：编辑、Vim、历史、补全、粘贴、IME 和滚动全部沿用 omp。
-- `⏱` / `💲` **额度栏**：无分隔线；图标沿用 session accent，数值加粗并右对齐。订阅显示 `⏱ 7d 60%`，余额显示 `💲 ¥42.00`。
+- `⏱` / `$` **额度栏**：无分隔线；图标沿用 session accent，数值加粗并右对齐。订阅显示 `⏱ 7d 60%`，余额显示 `$ ¥42.00`。
 - `≡` **状态栏**：使用 omp 原生 preset，不在插件里重写 model、mode、path、git、pr、context、cost、session 等 segment。
 - **宽度**：88 列起左右分栏，额度栏 22–26 列；窄屏或 `tui.imeSafeCursor` 时放在输入下方。
 - **留白**：输入上下各 1 行空白 rail；首行不贴顶，额度栏与输入首行对齐。
@@ -65,7 +65,7 @@ omp config set composer.shape omp-composer-folio-gutter
 | `xai-oauth` / `xai` | `⏱ 7d 60%`、`⏱ 1mo 80%`；不含 on-demand cap |
 | `google-antigravity` | `⏱ 1d …`、`⏱ 7d …`；按当前模型选 counter |
 | `devin` | `⏱ prompt/flow/flex …`、`⏱ 1d/7d …`；credits + daily/weekly quota |
-| `deepseek` | `💲 ¥42.00`；绝对余额，无百分比 |
+| `deepseek` | `$ ¥42.00`；绝对余额，无百分比 |
 | 其他 / 不支持 | 有可解析报告：`⏱ <窗口> <剩余>%`；否则 `⏱ 未知` |
 
 - 百分比是**剩余份额**：`100%` 满额，`0%` 用完；`≤25%` / `≤10%` 显示 warning/error。多个账号无法确认时显示 `⏱ 多账号`，不会相加。
@@ -79,7 +79,7 @@ omp config set composer.shape omp-composer-folio-gutter
 BUN_BE_BUN=1 omp test ./src/quota.test.ts ./src/quota-panel.test.ts ./src/register.test.ts
 ```
 
-当前结果：23 个测试全部通过。真实 omp PTY 已验证 120/70 列、原生状态栏、额度栏、IME-safe、shape 切换、退出最后帧，以及 DeepSeek、Cursor、Kimi、Antigravity、Devin 的实际额度显示。
+当前结果：24 个测试全部通过。真实 omp PTY 已验证 120/70 列、原生状态栏、额度栏、IME-safe、shape 切换、退出最后帧，以及 DeepSeek、Cursor、Kimi、Antigravity、Devin 的实际额度显示。
 
 ## 兼容边界
 

@@ -30,7 +30,7 @@ Guidance for changes in **omp Folio**, an omp `Composer Shape` plugin. Target is
 - The quota rail is quota-only. Do not add model, context, cost, or project segments there; the native status bar owns them.
 - No vertical divider. Quota content is right-aligned in the rail; icon color uses the same session accent as the left rail.
 - `QuotaPanel` rules:
-  - `⏱` for subscription windows, `💲` for absolute balances.
+  - `⏱` for subscription windows, `$` for absolute balances (Nerd preset keeps its `\uf155` glyph).
   - Values are bold; labels use the longest label width in the current snapshot, never a fixed column.
   - Percentage is **remaining**, not used: `100%` = full, `0%` = empty. `<=25%` warning, `<=10%` error.
   - Unknown, stale, ambiguous, or failed states use a short icon + word; never invent a percentage.

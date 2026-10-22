@@ -24,6 +24,12 @@ function icon(name: "time" | "cost" | "warning", fallback: string): string {
 	return icons?.[name] || fallback;
 }
 
+function costIcon(): string {
+	const glyph = icon("cost", "$");
+	// Color emoji ignore ANSI foreground; use the text dollar so session accent applies.
+	return /\p{Emoji_Presentation}/u.test(glyph) ? "$" : glyph;
+}
+
 function isStale(quota: QuotaSnapshot): boolean {
 	return quota.fetchedAt !== undefined && Number.isFinite(quota.fetchedAt)
 		&& Date.now() - quota.fetchedAt > STALE_AFTER_MS;
@@ -92,7 +98,7 @@ export class QuotaPanel {
 		const balances = entries.filter(entry => entry.balance);
 		const allBalance = entries.length > 0 && balances.length === entries.length;
 		const labelWidth = Math.max(0, ...entries.map(entry => visibleWidth(entry.label)));
-		const prefixIcon = allBalance ? icon("cost", "$") : icon("time", "⏱");
+		const prefixIcon = allBalance ? costIcon() : icon("time", "⏱");
 		const prefix = `${this.#accent(prefixIcon)} `;
 		const prefixWidth = visibleWidth(prefix);
 		const lines: string[] = [];
