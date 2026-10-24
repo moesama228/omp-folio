@@ -2,7 +2,7 @@
 
 `▎` 左侧输入 · `⏱` 订阅额度 · `$` 余额 · `≡` 原生状态栏
 
-一个 omp **Composer Shape**：输入区保持 omp 原有行为，右侧只显示额度/余额，下方交还给 omp 原生状态栏。面向 omp **18.12.6** 的普通 ANSI 终端。
+一个 omp **Composer Shape 插件**：输入区保持 omp 原有行为，额度/余额显示在右侧或顶部账签，下方交还给 omp 原生状态栏。面向 omp **18.12.6** 的普通 ANSI 终端。
 
 ## 安装
 
@@ -32,10 +32,12 @@ omp plugin install github:moesama228/omp-folio
 omp --extension /path/to/omp_composer/index.ts
 ```
 
-安装后在 **Appearance → Composer Shape → Folio Gutter** 选择，或直接写全局配置：
+安装后在 **Appearance → Composer Shape** 选择 Folio Gutter、Folio Gauge 或 Folio Capline，或直接写全局配置：
 
 ```sh
 omp config set composer.shape omp-composer-folio-gutter
+omp config set composer.shape omp-composer-folio-gauge
+omp config set composer.shape omp-composer-folio-capline
 ```
 
 - 全局安装后不要再保留项目里的 `.omp/extensions/folio.ts`，否则会重复加载。
@@ -46,10 +48,17 @@ omp config set composer.shape omp-composer-folio-gutter
 ## 布局
 
 - `▎` **输入**：编辑、Vim、历史、补全、粘贴、IME 和滚动全部沿用 omp。
+
+| Shape | 布局 |
+| --- | --- |
+| `Folio Gutter` | 现有右侧额度轨，只显示标签和数值 |
+| `Folio Gauge` | 右侧余量刻度，百分比同时显示为最多 10 格方块 |
+| `Folio Capline` | 顶部额度账签，输入使用完整宽度；空间不足时按完整额度项换行，单项自身超宽时再按列折行 |
+
 - `⏱` / `$` **额度栏**：无分隔线；图标沿用 session accent，数值加粗并右对齐。订阅显示 `⏱ 7d 60%`，余额显示 `$ ¥42.00`。
 - `≡` **状态栏**：使用 omp 原生 preset，不在插件里重写 model、mode、path、git、pr、context、cost、session 等 segment。
-- **宽度**：88 列起左右分栏，额度栏 22–26 列；窄屏或 `tui.imeSafeCursor` 时放在输入下方。
-- **留白**：输入上下各 1 行空白 rail；首行不贴顶，额度栏与输入首行对齐。
+- **宽度**：Gutter / Gauge 在 88 列起左右分栏，额度栏 22–26 列；窄屏或 `tui.imeSafeCursor` 时放在输入下方。Capline 始终放在输入上方，不占光标右侧。
+- **留白**：Gutter / Gauge 在输入上下各留 1 行空白 rail；Capline 用顶部账签替代上空白，保留底部空白 rail。
 - **颜色**：左侧 rail 跟随 `statusLine.sessionAccent`；关闭该设置后回到主题 accent。
 
 ## Provider 与额度样式
@@ -69,6 +78,7 @@ omp config set composer.shape omp-composer-folio-gutter
 | 其他 / 不支持 | 有可解析报告：`⏱ <窗口> <剩余>%`；否则 `⏱ 未知` |
 
 - 百分比是**剩余份额**：`100%` 满额，`0%` 用完；`≤25%` / `≤10%` 显示 warning/error。多个账号无法确认时显示 `⏱ 多账号`，不会相加。
+- Gauge 只为已知百分比绘制刻度，正常刻度使用 session accent；余额、未知和失败不伪造刻度。Capline 换行和极窄折行不会丢弃额度项。
 - 请求失败显示 `⏱ 获取失败`；数据超过 10 分钟追加 `⚠ 过期`；缺失数据不会被当成 100%。DeepSeek 账户不可用时追加 `⚠ 不可用`。
 - DeepSeek 成功缓存 5 分钟、失败缓存 30 秒；API key 不进入日志或错误信息。其他 provider 读取宿主缓存，不逐帧联网。
 
@@ -79,7 +89,7 @@ omp config set composer.shape omp-composer-folio-gutter
 BUN_BE_BUN=1 omp test ./src/quota.test.ts ./src/quota-panel.test.ts ./src/register.test.ts
 ```
 
-当前结果：24 个测试全部通过。真实 omp PTY 已验证 120/70 列、原生状态栏、额度栏、IME-safe、shape 切换、退出最后帧，以及 DeepSeek、Cursor、Kimi、Antigravity、Devin 的实际额度显示。
+当前结果：34 个测试全部通过。真实 omp 18.12.6 PTY 已验证 Gauge 的 120/88/87/70 列、Capline 的 120/70/20/16 列、原生状态栏、真实 Kimi 额度、IME-safe override、Appearance 往返切换、原生编辑序列和退出最终帧。
 
 ## 兼容边界
 

@@ -6,7 +6,7 @@ import { getSessionAccentAnsi, getSessionAccentHex } from "@oh-my-pi/pi-tui/them
 import { attachFolioEditor } from "./src/editor.ts";
 import { quotaContextKey, readQuota } from "./src/quota.ts";
 import { ensureFolioShape } from "./src/register.ts";
-import { SHAPE_ID } from "./src/shape.ts";
+import { isFolioShape, SHAPE_ID } from "./src/shape.ts";
 import type { QuotaSnapshot } from "./src/types.ts";
 
 type EditorFactory = (tui: TUI, theme: EditorTheme, keybindings: KeybindingsManager) => CustomEditor;
@@ -43,7 +43,11 @@ export default function composerFolio(pi: ExtensionAPI): void {
 	let stopped = false;
 	let inFlightKey: string | undefined;
 	let snapshot: QuotaSnapshot = { key: "", state: "unknown", entries: [], message: "正在读取" };
-	const enabled = () => shape?.get(pi.pi.settings) === SHAPE_ID;
+	const currentShape = (): string | undefined => {
+		const value: unknown = shape?.get(pi.pi.settings);
+		return typeof value === "string" ? value : undefined;
+	};
+	const enabled = () => isFolioShape(currentShape());
 	// Match the host editor border: hash the session name into the theme's accent
 	// space. The native status line uses the same derivation, so the left rail and
 	// the status bar move together when a session is renamed.
@@ -86,22 +90,22 @@ export default function composerFolio(pi: ExtensionAPI): void {
 
 	let wrapped = false;
 	let stopShapeListener: (() => void) | undefined;
-	// Replacing the editor always repaints. Wait until Folio Gutter is actually
+	// Replacing the editor always repaints. Wait until a Folio style is actually
 	// selected so another shape is not flashed and then overwritten.
 	const installEditor = (ctx: ExtensionContext): void => {
 		if (wrapped || !ctx.hasUI || !enabled()) return;
 		wrapped = true;
 		const previous = ctx.ui.getEditorComponent() as FolioFactory | EditorFactory | undefined;
-		const base = previous && "folioShapeId" in previous && previous.folioShapeId === SHAPE_ID
+		const base = previous && "folioShapeId" in previous && isFolioShape(previous.folioShapeId)
 			? previous.folioBaseFactory : previous;
 		const factory: FolioFactory = Object.assign((tui: TUI, theme: EditorTheme, keys: KeybindingsManager) => {
 			editor = attachFolioEditor(base ? base(tui, theme, keys) : new CustomEditor(tui, theme, keys), tui, {
-				enabled,
+				shape: currentShape,
 				quota: currentQuota,
 				accentColor,
 			});
 			return editor;
-		}, { folioBaseFactory: base, folioShapeId: SHAPE_ID });
+		}, { folioBaseFactory: base, folioShapeId: currentShape() ?? SHAPE_ID });
 		ctx.ui.setEditorComponent(factory);
 	};
 
@@ -128,8 +132,8 @@ export default function composerFolio(pi: ExtensionAPI): void {
 		stopShapeListener?.();
 		stopShapeListener = undefined;
 		// Keep the editor and context until the host's final history flush: the
-		// style stays registered, so the last frame remains a complete Folio Gutter frame
-		// instead of a box fallback with a dock sidebar.
+		// style stays registered, so the last frame retains the selected Folio chrome
+		// instead of falling back to box.
 		wrapped = false;
 	});
 }

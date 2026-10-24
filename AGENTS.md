@@ -16,23 +16,24 @@ Guidance for changes in **omp Folio**, an omp `Composer Shape` plugin. Target is
 ## Shape lifecycle
 
 - `src/register.ts` installs `installExtensionComposerShape` at module evaluation, bypassing `pi.registerComposerShape`.
-  - This makes the first interactive frame Folio Gutter.
-  - The host's stop-time disposer only removes its own registration, so the final history flush still renders Folio Gutter.
+  - This makes the first interactive frame use the selected Folio style.
+  - The host's stop-time disposer only removes its own registration, so the final history flush still renders the selected Folio style.
   - A no-op file-write fallback keeps the extension on the eager startup path. It always returns `false`; do not replace it with real write behavior.
-- `SHAPE_ID = "omp-composer-folio-gutter"`. The only legacy id is `omp-composer-dock`, used for one-time migration in `index.ts`. Keep the new id stable; future styles use new ids.
+- `SHAPE_ID = "omp-composer-folio-gutter"`; additional stable ids are `GAUGE_SHAPE_ID = "omp-composer-folio-gauge"` and `CAPLINE_SHAPE_ID = "omp-composer-folio-capline"`. The only legacy id is `omp-composer-dock`, used for one-time migration in `index.ts`. Keep existing ids stable; future styles use new ids.
 - Host prepaint still paints an unknown shape as `box` before extensions load. That frame cannot be removed plugin-side; do not work around it by modifying omp.
 - Registering the same style through both `installExtensionComposerShape` and `pi.registerComposerShape` throws on duplicate installation. Keep the direct-install path.
 
 ## Layout
 
-- `src/shape.ts`: host `rail` surface, `bottomBar: "full"`, `statusAttachment: "none"`, `verticalChrome: 2`, one blank rail above and below the input.
-- `src/editor.ts`: split at `>= 88` columns. Quota rail is 22–26 columns; below 88 or with `tui.imeSafeCursor`, stack it under the input.
-- The quota rail is quota-only. Do not add model, context, cost, or project segments there; the native status bar owns them.
-- No vertical divider. Quota content is right-aligned in the rail; icon color uses the same session accent as the left rail.
+- `src/shape.ts`: all Folio styles use the host `rail` surface, `bottomBar: "full"`, and `statusAttachment: "none"`. Gutter/Gauge have `verticalChrome: 2` with blank rails above and below; Capline has `verticalChrome: 1`, no top chrome, and one blank rail below.
+- `src/editor.ts`: Gutter/Gauge split at `>= 88` columns with a 22–26 column quota rail; below 88 or with `tui.imeSafeCursor`, stack it under the input. Capline renders quota above the full-width input and wraps complete entries; an individually oversized entry is column-wrapped without losing content.
+- The quota rail and capline are quota-only. Do not add model, context, cost, or project segments there; the native status bar owns them.
+- No vertical divider. Quota content is right-aligned; icon color uses the same session accent as the left rail.
 - `QuotaPanel` rules:
   - `⏱` for subscription windows, `$` for absolute balances (Nerd preset keeps its `\uf155` glyph).
   - Values are bold; labels use the longest label width in the current snapshot, never a fixed column.
   - Percentage is **remaining**, not used: `100%` = full, `0%` = empty. `<=25%` warning, `<=10%` error.
+  - Gauge draws at most 10 cells only for known percentages; normal meters use accent, low meters use warning/error. Balances and unknown states have no meter.
   - Unknown, stale, ambiguous, or failed states use a short icon + word; never invent a percentage.
 - The left rail follows `statusLine.sessionAccent` via `getSessionAccentHex`; when disabled or unnamed, fall back to theme `accent`. Wrap `CustomEditor.setTheme` so host shape/settings sync cannot overwrite it.
 
@@ -56,7 +57,7 @@ Guidance for changes in **omp Folio**, an omp `Composer Shape` plugin. Target is
 - `src/register.ts`: idempotent shape registration.
 - `src/shape.ts`: ComposerStyle.
 - `src/editor.ts`: editor/rail decoration.
-- `src/quota-panel.ts`: visual quota rail.
+- `src/quota-panel.ts`: shared visual quota layouts.
 - `src/quota.ts`: usage-provider adaptation and DeepSeek balance.
 - `src/types.ts`: shared quota types.
 - Keep new dependencies out unless they remove real code. Use TypeScript strict and existing component primitives.

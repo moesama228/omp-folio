@@ -10,10 +10,11 @@ import {
 import type { CustomEditor } from "@oh-my-pi/pi-tui/prompt/custom-editor";
 import { getEditorTheme } from "@oh-my-pi/pi-tui/theme";
 import { QuotaPanel } from "./quota-panel.ts";
+import { CAPLINE_SHAPE_ID, GAUGE_SHAPE_ID, isFolioShape } from "./shape.ts";
 import type { QuotaSnapshot } from "./types.ts";
 
 export interface FolioEditorOptions {
-	enabled(): boolean;
+	shape(): string | undefined;
 	quota(): QuotaSnapshot;
 	/** Theme-aware session accent; applied to the rail and blank chrome. */
 	accentColor(text: string): string;
@@ -28,7 +29,11 @@ export function attachFolioEditor(editor: CustomEditor, tui: TUI, options: Folio
 	const renderInput = editor.render.bind(editor);
 	const setInputMaxHeight = editor.setMaxHeight.bind(editor);
 	const setImeSafeCursorLayout = editor.setImeSafeCursorLayout.bind(editor);
-	const panel = new QuotaPanel(options.accentColor);
+	const panels = {
+		list: new QuotaPanel(options.accentColor),
+		gauge: new QuotaPanel(options.accentColor, "gauge"),
+		capline: new QuotaPanel(options.accentColor, "capline"),
+	};
 	let inputLines: readonly string[] = [];
 	let maxHeight: number | undefined;
 	let imeSafe = false;
@@ -40,7 +45,7 @@ export function attachFolioEditor(editor: CustomEditor, tui: TUI, options: Folio
 	};
 	const divider = () => "    ";
 	const columns = new Row({
-		children: [{ content: input, grow: 1 }, { content: panel, width: 24, padding: { top: 1, bottom: 1, right: 1 } }],
+		children: [{ content: input, grow: 1 }, { content: panels.list, width: 24, padding: { top: 1, bottom: 1, right: 1 } }],
 		gap: divider,
 	});
 
@@ -54,11 +59,23 @@ export function attachFolioEditor(editor: CustomEditor, tui: TUI, options: Folio
 	};
 
 	editor.render = width => {
-		if (!options.enabled()) {
+		const activeShape = options.shape();
+		if (!isFolioShape(activeShape)) {
 			setInputMaxHeight(maxHeight);
 			return renderInput(width);
 		}
+		const mode = activeShape === GAUGE_SHAPE_ID ? "gauge" : activeShape === CAPLINE_SHAPE_ID ? "capline" : "list";
+		const panel = panels[mode];
 		panel.update(options.quota());
+		if (activeShape === CAPLINE_SHAPE_ID) {
+			const topRows = panel.render(Math.max(1, width - 2));
+			setInputMaxHeight(maxHeight === undefined ? undefined : Math.max(3, maxHeight - topRows.length));
+			const rows = renderInput(width);
+			return [
+				...topRows.map(line => surface(options.accentColor("▎") + " " + line + padding(Math.max(0, width - 2 - visibleWidth(line))))),
+				...rows,
+			];
+		}
 		// IME-safe mode explicitly requires no right-hand cells after the caret.
 		// Stack the same information rather than defeating that terminal guarantee.
 		const split = width >= SPLIT_MIN_WIDTH && !imeSafe;
@@ -86,12 +103,12 @@ export function attachFolioEditor(editor: CustomEditor, tui: TUI, options: Folio
 	editor.tui = tui;
 	// The host reapplies its own editor theme on every shape/settings sync. Wrap
 	// setTheme so the session-derived rail accent survives those resets, but only
-	// while Folio Gutter is the active shape.
+	// while any Folio shape is active.
 	const applyTheme = editor.setTheme.bind(editor);
-	editor.setTheme = next => applyTheme(options.enabled()
+	editor.setTheme = next => applyTheme(isFolioShape(options.shape())
 		? { ...next, accentColor: options.accentColor }
 		: next);
-	applyTheme({ ...getEditorTheme(), ...(options.enabled() ? { accentColor: options.accentColor } : {}) });
+	applyTheme({ ...getEditorTheme(), ...(isFolioShape(options.shape()) ? { accentColor: options.accentColor } : {}) });
 	return editor;
 }
 
