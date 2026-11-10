@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+	opencodeGoUsageProvider,
 	parseClaudeUsagePayload,
 	parseCodexRateLimitHeaders,
 	type OAuthAccountSummary,
@@ -195,7 +196,65 @@ function devin(): UsageReport {
 	};
 }
 
+async function opencodeGo(): Promise<UsageReport> {
+	// Exercise the host's real decoder; Folio must not implement usage fetching.
+	const report = await opencodeGoUsageProvider.fetchUsage({
+		provider: "opencode-go",
+		credential: { type: "api_key", apiKey: "test-go-key" },
+	}, {
+		fetch: async () => new Response(JSON.stringify({ usage: {
+			rolling: { status: "ok", percent: 0, resetsAt: new Date(fetchedAt + hour).toISOString() },
+			weekly: { status: "ok", percent: 25, resetsAt: new Date(fetchedAt + 24 * hour).toISOString() },
+			monthly: { status: "rate-limited", percent: 100, resetsAt: new Date(fetchedAt + 10 * 24 * hour).toISOString() },
+		} })),
+	});
+	if (!report) throw new Error("Expected a host OpenCode Go usage report");
+	return report;
+}
+
 describe("subscription remaining quota", () => {
+	test("OpenCode Go API-key usage keeps all three real windows including monthly", async () => {
+		const report = await opencodeGo();
+		expect(report.limits[2].window?.durationMs).toBeUndefined();
+		const { ctx } = fixture([report], { provider: "opencode-go", modelId: "glm-5", accounts: [] });
+		const result = await readQuota(ctx);
+		expect(result.state).toBe("ready");
+		expect(result.entries).toEqual([
+			{ label: "5h", remaining: 1, resetsAt: fetchedAt + hour },
+			{ label: "7d", remaining: 0.75, resetsAt: fetchedAt + 24 * hour },
+			{ label: "1mo", remaining: 0, resetsAt: fetchedAt + 10 * 24 * hour },
+		]);
+		expect(result.fetchedAt).toBe(report.fetchedAt);
+	});
+
+	test("OpenCode Go never merges anonymous, partly identified or different accounts", async () => {
+		const report = await opencodeGo();
+		const identified = { ...report, metadata: { accountId: "one" } };
+		for (const reports of [
+			[report, structuredClone(report)],
+			[report, identified],
+			[identified, { ...report, metadata: { accountId: "two" } }],
+		]) {
+			const { ctx } = fixture(reports, { provider: "opencode-go", accounts: [] });
+			const result = await readQuota(ctx);
+			expect(result.state).toBe("unknown");
+			expect(result.entries).toEqual([]);
+			expect(result.message).toContain("多账号");
+		}
+	});
+
+	test("OpenCode Go does not borrow Zen reports or invent missing quantities", async () => {
+		const report = await opencodeGo();
+		const missingAmounts = structuredClone(report);
+		for (const limit of missingAmounts.limits) limit.amount = { unit: "percent" };
+		for (const reports of [null, [], [{ ...report, provider: "opencode-zen" }], [missingAmounts]]) {
+			const { ctx } = fixture(reports, { provider: "opencode-go", accounts: [] });
+			const result = await readQuota(ctx);
+			expect(result.state).toBe("unknown");
+			expect(result.entries).toEqual([]);
+		}
+	});
+
 	test("missing reports or quantitative fields stay unknown, not 100%", async () => {
 		for (const reports of [null, [], [codex({ unit: "percent" })]]) {
 			const result = await readQuota(fixture(reports).ctx);

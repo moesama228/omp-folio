@@ -154,6 +154,8 @@ function modelLimits(report: UsageReport, modelId: string): readonly UsageLimit[
 			// Credit buckets and daily/weekly quotas share the plan scope; all are useful.
 			return report.limits;
 		default:
+			// OpenCode Go's shared windows also use this path: its ranking
+			// strategy excludes monthly for routing, but display needs it too.
 			return report.limits.filter(limit => {
 				if (limit.scope.modelId) return normalized(limit.scope.modelId) === normalized(modelId);
 				// An unknown tier/feature is not a provider-wide subscription allowance.
@@ -232,6 +234,8 @@ function quotaLabel(report: UsageReport, limit: UsageLimit): string | undefined 
 		if (limit.window?.id === "1w") return "7d";
 		if (limit.window?.id === "1mo") return "1mo";
 	}
+	// A subscription month follows the billing anniversary, not a fixed 30d.
+	if (report.provider === "opencode-go" && limit.window?.id === "monthly") return "1mo";
 	return windowLabel(limit) ?? sanitizedLabel(limit.label);
 }
 
@@ -253,8 +257,8 @@ function reportIdentity(report: UsageReport): string | undefined {
  */
 function reportsForActiveApiKey(reports: readonly UsageReport[]): readonly UsageReport[] | undefined {
 	if (reports.length <= 1) return reports;
-	const identities = new Set(reports.map(reportIdentity).filter((value): value is string => Boolean(value)));
-	if (identities.size === 1) return reports;
+	const identities = reports.map(reportIdentity);
+	if (identities.every(identity => identity !== undefined) && new Set(identities).size === 1) return reports;
 	return undefined;
 }
 
@@ -368,7 +372,7 @@ export async function readQuota(ctx: ExtensionContext): Promise<QuotaSnapshot> {
 			baseUrlResolver: provider => ctx.modelRegistry.getProviderBaseUrl(provider),
 		});
 		const relevant = (reports ?? []).filter(report => report.provider === provider && Number.isFinite(report.fetchedAt));
-		const apiKeyUsage = provider === "cursor" || provider === "devin";
+		const apiKeyUsage = provider === "cursor" || provider === "devin" || provider === "opencode-go";
 		const strictAccount = Boolean(account && pinned);
 		const accepted = account
 			? strictAccount ? relevant : reportsForActiveApiKey(relevant)

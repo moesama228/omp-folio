@@ -69,6 +69,7 @@ omp config set composer.shape omp-composer-folio-capline
 | --- | --- |
 | `anthropic` | `⏱ 5h 82%`、`⏱ 7d 64%`；只显示报告里的窗口 |
 | `openai-codex` | `⏱ 5h 86%`、`⏱ 7d 78%`；不补不存在的窗口 |
+| `opencode-go` | `⏱ 5h 100%`、`⏱ 7d 75%`、`⏱ 1mo 60%`；月度按订阅账期，复用宿主 API-key 用量报告 |
 | `kimi-code` | `⏱ 5h 100%`、`⏱ 7d 61%` |
 | `cursor` | `⏱ auto 84%`、`⏱ api 72%`、`⏱ plan …`；按当前模型选 auto/API pool |
 | `xai-oauth` / `xai` | `⏱ 7d 60%`、`⏱ 1mo 80%`；不含 on-demand cap |
@@ -81,6 +82,7 @@ omp config set composer.shape omp-composer-folio-capline
 - Gauge 只为已知百分比绘制刻度，正常刻度使用 session accent；余额、未知和失败不伪造刻度。Capline 换行和极窄折行不会丢弃额度项。
 - 请求失败显示 `⏱ 获取失败`；数据超过 10 分钟追加 `⚠ 过期`；缺失数据不会被当成 100%。DeepSeek 账户不可用时追加 `⚠ 不可用`。
 - DeepSeek 成功缓存 5 分钟、失败缓存 30 秒；API key 不进入日志或错误信息。其他 provider 读取宿主缓存，不逐帧联网。
+- OpenCode Go 使用 omp 已配置的 API key，无需额外额度配置；多个匿名密钥报告无法确认归属时显示 `⏱ 多账号`，不合并。三个窗口与 [官方 Go 说明](https://docs.opencode.ai/docs/go/) 一致。
 
 ## 验证
 
@@ -89,7 +91,7 @@ omp config set composer.shape omp-composer-folio-capline
 BUN_BE_BUN=1 omp test ./src/quota.test.ts ./src/quota-panel.test.ts ./src/register.test.ts
 ```
 
-当前结果：34 个测试全部通过。真实 omp 18.12.6 PTY 已验证 Gauge 的 120/88/87/70 列、Capline 的 120/70/20/16 列、原生状态栏、真实 Kimi 额度、IME-safe override、Appearance 往返切换、原生编辑序列和退出最终帧。
+37 个测试全部通过；真实 PTY 已验证宽窄屏、IME-safe、样式切换、原生编辑、退出最终帧，以及 Kimi 和 OpenCode Go 额度显示。
 
 ## 兼容边界
 
