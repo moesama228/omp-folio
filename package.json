@@ -12,6 +12,7 @@
     "index.ts",
     "src/editor.ts",
     "src/quota-panel.ts",
+    "src/provider-status.ts",
     "src/quota.ts",
     "src/register.ts",
     "src/shape.ts",

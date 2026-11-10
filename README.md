@@ -58,6 +58,7 @@ omp config set composer.shape omp-composer-folio-capline
 - `⏱` / `$` **额度栏**：无分隔线；图标沿用 session accent，数值加粗并右对齐。订阅显示 `⏱ 7d 60%`，余额显示 `$ ¥42.00`。
 - `≡` **状态栏**：使用 omp 原生 preset，不在插件里重写 model、mode、path、git、pr、context、cost、session 等 segment。
 - **宽度**：Gutter / Gauge 在 88 列起左右分栏，额度栏 22–26 列；窄屏或 `tui.imeSafeCursor` 时放在输入下方。Capline 始终放在输入上方，不占光标右侧。
+- **Provider**：三种样式均在原生状态栏最右侧显示 `◇ <provider>`，标明当前模型的提供方，区分不同来源的同名模型。菱形跟随 session accent，名称用淡色；窄屏由宿主收缩原有状态项，名称过长时省略，低于 24 列时隐藏标识。
 - **留白**：Gutter / Gauge 在输入上下各留 1 行空白 rail；Capline 用顶部账签替代上空白，保留底部空白 rail。
 - **颜色**：左侧 rail 跟随 `statusLine.sessionAccent`；关闭该设置后回到主题 accent。
 
@@ -88,10 +89,10 @@ omp config set composer.shape omp-composer-folio-capline
 
 ```sh
 ./node_modules/.bin/tsc --noEmit
-BUN_BE_BUN=1 omp test ./src/quota.test.ts ./src/quota-panel.test.ts ./src/register.test.ts
+BUN_BE_BUN=1 omp test ./src/quota.test.ts ./src/quota-panel.test.ts ./src/register.test.ts ./src/provider-status.test.ts
 ```
 
-37 个测试全部通过；真实 PTY 已验证宽窄屏、IME-safe、样式切换、原生编辑、退出最终帧，以及 Kimi 和 OpenCode Go 额度显示。
+40 个测试全部通过，覆盖已适配 provider 的额度解析、账号匹配与 provider 标识；真实 PTY 已验证宽窄屏、IME-safe、样式切换、原生编辑及退出最终帧。
 
 ## 兼容边界
 

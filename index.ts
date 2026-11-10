@@ -5,6 +5,7 @@ import { theme, type EditorTheme, type KeybindingsManager, type TUI } from "@oh-
 import { getSessionAccentAnsi, getSessionAccentHex } from "@oh-my-pi/pi-tui/theme";
 import { attachFolioEditor } from "./src/editor.ts";
 import { quotaContextKey, readQuota } from "./src/quota.ts";
+import { attachFolioProviderStatus } from "./src/provider-status.ts";
 import { ensureFolioShape } from "./src/register.ts";
 import { isFolioShape, SHAPE_ID } from "./src/shape.ts";
 import type { QuotaSnapshot } from "./src/types.ts";
@@ -107,6 +108,12 @@ export default function composerFolio(pi: ExtensionAPI): void {
 			return editor;
 		}, { folioBaseFactory: base, folioShapeId: currentShape() ?? SHAPE_ID });
 		ctx.ui.setEditorComponent(factory);
+		// The host assigns composerFacts during setEditorComponent's shape sync.
+		attachFolioProviderStatus(editor?.composerFacts, {
+			shape: currentShape,
+			provider: () => context?.model?.provider,
+			accentColor,
+		});
 	};
 
 	pi.on("session_start", (_event, ctx) => {

@@ -26,6 +26,7 @@ Guidance for changes in **omp Folio**, an omp `Composer Shape` plugin. Target is
 ## Layout
 
 - `src/shape.ts`: all Folio styles use the host `rail` surface, `bottomBar: "full"`, and `statusAttachment: "none"`. Gutter/Gauge have `verticalChrome: 2` with blank rails above and below; Capline has `verticalChrome: 1`, no top chrome, and one blank rail below.
+- `src/provider-status.ts`: append `◇ <provider>` at the far right of the native bottom status bar only for Folio. Decorate the existing public `renderBottomBar` instance obtained from `editor.composerFacts`; native rendering owns all segments and width reduction. No custom footer or replacement status implementation. Keep the badge within one third of the width (at most 28 columns), and omit it below 24 columns.
 - `src/editor.ts`: Gutter/Gauge split at `>= 88` columns with a 22–26 column quota rail; below 88 or with `tui.imeSafeCursor`, stack it under the input. Capline renders quota above the full-width input and wraps complete entries; an individually oversized entry is column-wrapped without losing content.
 - The quota rail and capline are quota-only. Do not add model, context, cost, or project segments there; the native status bar owns them.
 - No vertical divider. Quota content is right-aligned; icon color uses the same session accent as the left rail.
@@ -88,7 +89,7 @@ Run from the repository:
 
 ```sh
 ./node_modules/.bin/tsc --noEmit
-BUN_BE_BUN=1 omp test ./src/quota.test.ts ./src/quota-panel.test.ts ./src/register.test.ts
+BUN_BE_BUN=1 omp test ./src/quota.test.ts ./src/quota-panel.test.ts ./src/register.test.ts ./src/provider-status.test.ts
 ```
 
 Before yielding, also exercise the changed runtime path in a real omp PTY. For visual or lifecycle changes check wide (>=88), narrow (70), IME-safe, shape switching, and the final frame after quit. For quota changes use `--model provider/model` and confirm the expected window/balance.
