@@ -59,7 +59,7 @@ omp config set composer.shape omp-composer-folio-capline
 - `≡` **状态栏**：使用 omp 原生 preset，不在插件里重写 model、mode、path、git、pr、context、cost、session 等 segment。
 - **宽度**：Gutter / Gauge 在 88 列起左右分栏，额度栏 22–26 列；窄屏或 `tui.imeSafeCursor` 时放在输入下方。Capline 始终放在输入上方，不占光标右侧。
 - **Provider**：三种样式均在原生状态栏最右侧显示 `◇ <provider>`，标明当前模型的提供方，区分不同来源的同名模型。菱形跟随 session accent，名称用淡色；窄屏由宿主收缩原有状态项，名称过长时省略，低于 24 列时隐藏标识。
-- **留白**：Gutter / Gauge 在输入上下各留 1 行空白 rail；Capline 用顶部账签替代上空白，保留底部空白 rail。
+- **留白**：三种样式上下各留 1 行空白 rail；Capline 额度置于顶部留白之下，右侧留 2 列内边距，换行后保持一致。
 - **颜色**：左侧 rail 跟随 `statusLine.sessionAccent`；关闭该设置后回到主题 accent。
 
 ## Provider 与额度样式

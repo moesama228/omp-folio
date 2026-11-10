@@ -68,10 +68,13 @@ export function attachFolioEditor(editor: CustomEditor, tui: TUI, options: Folio
 		const panel = panels[mode];
 		panel.update(options.quota());
 		if (activeShape === CAPLINE_SHAPE_ID) {
-			const topRows = panel.render(Math.max(1, width - 2));
-			setInputMaxHeight(maxHeight === undefined ? undefined : Math.max(3, maxHeight - topRows.length));
+			// Leave two cells after the quota, including on wrapped continuation rows.
+			const topRows = panel.render(Math.max(1, width - 4));
+			setInputMaxHeight(maxHeight === undefined ? undefined : Math.max(3, maxHeight - topRows.length - 1));
 			const rows = renderInput(width);
 			return [
+				// Native top chrome would appear below the prepended quota rows.
+				surface(options.accentColor("▎") + padding(Math.max(0, width - 1))),
 				...topRows.map(line => surface(options.accentColor("▎") + " " + line + padding(Math.max(0, width - 2 - visibleWidth(line))))),
 				...rows,
 			];
