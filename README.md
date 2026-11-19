@@ -87,6 +87,14 @@ omp config set composer.shape omp-composer-folio-capline
 
 ## 验证
 
+开发前先安装依赖：
+
+```sh
+bun install
+```
+
+然后运行类型检查和测试：
+
 ```sh
 ./node_modules/.bin/tsc --noEmit
 BUN_BE_BUN=1 omp test ./src/quota.test.ts ./src/quota-panel.test.ts ./src/register.test.ts ./src/provider-status.test.ts
