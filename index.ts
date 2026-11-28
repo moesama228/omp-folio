@@ -1,26 +1,15 @@
 import type { ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
 import { lookup } from "@oh-my-pi/pi-coding-agent/config/registry";
-import { CustomEditor } from "@oh-my-pi/pi-tui/prompt/custom-editor";
-import { theme, type EditorTheme, type KeybindingsManager, type TUI } from "@oh-my-pi/pi-tui";
-import { getSessionAccentAnsi, getSessionAccentHex } from "@oh-my-pi/pi-tui/theme";
-import { attachFolioEditor } from "./src/editor.ts";
+import { signal } from "@oh-my-pi/pi-tui";
+import { currentTheme } from "@oh-my-pi/pi-tui/theme/runtime";
+import { caplineWidget, type FolioView } from "./src/editor.ts";
 import { quotaContextKey, readQuota } from "./src/quota.ts";
-import { attachFolioProviderStatus } from "./src/provider-status.ts";
-import { ensureFolioShape } from "./src/register.ts";
-import { isFolioShape, SHAPE_ID } from "./src/shape.ts";
+import { attachProviderStatus } from "./src/provider-status.ts";
+import { registerFolio } from "./src/register.ts";
+import { CAPLINE_SHAPE_ID, isFolioShape, SHAPE_ID } from "./src/shape.ts";
 import type { QuotaSnapshot } from "./src/types.ts";
 
-type EditorFactory = (tui: TUI, theme: EditorTheme, keybindings: KeybindingsManager) => CustomEditor;
-type FolioFactory = EditorFactory & { folioBaseFactory: EditorFactory | undefined; folioShapeId: string };
-
 export default function composerFolio(pi: ExtensionAPI): void {
-	ensureFolioShape();
-	// The host only forces an extension to bind before the first frame when it
-	// registered a provider, shortcut, composer shape, or file fallback. We
-	// install the shape directly (see src/register.ts), so keep this extension
-	// on the eager path with a no-op fallback. It is consulted only when a
-	// native write is denied, and answering false means "not handled".
-	pi.registerFileWriteFallback(async () => false);
 	const shape = lookup("composer.shape");
 	const sessionAccent = lookup("statusLine.sessionAccent");
 	// One-time rename from the first Dock prototype. Keep the setting stable
@@ -39,96 +28,86 @@ export default function composerFolio(pi: ExtensionAPI): void {
 		}
 	}
 	let context: ExtensionContext | undefined;
-	let editor: CustomEditor | undefined;
+	const imeSafe = lookup("tui.imeSafeCursor");
 	let request = 0;
 	let stopped = false;
 	let inFlightKey: string | undefined;
-	let snapshot: QuotaSnapshot = { key: "", state: "unknown", entries: [], message: "正在读取" };
+	const snapshot = signal<QuotaSnapshot>({ key: "", state: "unknown", entries: [], message: "正在读取" });
 	const currentShape = (): string | undefined => {
 		const value: unknown = shape?.get(pi.pi.settings);
 		return typeof value === "string" ? value : undefined;
 	};
 	const enabled = () => isFolioShape(currentShape());
-	// Match the host editor border: hash the session name into the theme's accent
-	// space. The native status line uses the same derivation, so the left rail and
-	// the status bar move together when a session is renamed.
-	const accentColor = (text: string): string => {
-		const name = sessionAccent?.get(pi.pi.settings) === false
-			? undefined
-			: context?.sessionManager.getSessionName();
-		const hex = name ? getSessionAccentHex(name, theme.sessionAccentInputs) : undefined;
-		const ansi = getSessionAccentAnsi(hex);
-		return ansi ? `${ansi}${text}\x1b[39m` : theme.fg("accent", text);
+	const view: FolioView = {
+		accent: text => currentTheme().fg("accent", text),
+		sessionAccent: () => sessionAccent?.get(pi.pi.settings) !== false && !!context?.sessionManager.getSessionName(),
+		imeSafe: () => imeSafe?.get(pi.pi.settings) === true,
+		quota() {
+			const value = snapshot();
+			const key = context && quotaContextKey(context);
+			return !key || key === value.key ? value : { key, state: "unknown", entries: [], message: "正在读取" };
+		},
 	};
-	const currentQuota = (): QuotaSnapshot => {
-		if (!context) return snapshot;
-		const key = quotaContextKey(context);
-		if (key !== snapshot.key) queueMicrotask(() => { void refresh(); });
-		return key === snapshot.key ? snapshot : { key, state: "unknown", entries: [], message: "正在读取" };
-	};
-	const repaint = () => editor?.tui?.requestRender();
+	registerFolio(pi, view);
+	const provider = signal<string | undefined>(undefined);
+	let detachStatus: (() => void) | undefined;
 	const refresh = async (): Promise<void> => {
 		if (stopped || !context || !enabled()) return;
+		provider.set(context.model?.provider);
 		const ctx = context;
 		const key = quotaContextKey(ctx);
 		if (inFlightKey === key) return;
 		inFlightKey = key;
 		const sequence = ++request;
-		if (snapshot.key !== key) {
-			snapshot = { key, state: "unknown", entries: [], message: "正在读取" };
-			repaint();
+		if (snapshot.peek().key !== key) {
+			snapshot.set({ key, state: "unknown", entries: [], message: "正在读取" });
 		}
 		try {
 			const next = await readQuota(ctx);
 			if (!stopped && sequence === request && context === ctx && next.key === quotaContextKey(ctx)) {
-				snapshot = next;
-				repaint();
+				snapshot.set(next);
 			}
 		} finally {
 			if (sequence === request) inFlightKey = undefined;
 		}
 	};
 
-	let wrapped = false;
 	let stopShapeListener: (() => void) | undefined;
-	// Replacing the editor always repaints. Wait until a Folio style is actually
-	// selected so another shape is not flashed and then overwritten.
-	const installEditor = (ctx: ExtensionContext): void => {
-		if (wrapped || !ctx.hasUI || !enabled()) return;
-		wrapped = true;
-		const previous = ctx.ui.getEditorComponent() as FolioFactory | EditorFactory | undefined;
-		const base = previous && "folioShapeId" in previous && isFolioShape(previous.folioShapeId)
-			? previous.folioBaseFactory : previous;
-		const factory: FolioFactory = Object.assign((tui: TUI, theme: EditorTheme, keys: KeybindingsManager) => {
-			editor = attachFolioEditor(base ? base(tui, theme, keys) : new CustomEditor(tui, theme, keys), tui, {
-				shape: currentShape,
-				quota: currentQuota,
-				accentColor,
-			});
-			return editor;
-		}, { folioBaseFactory: base, folioShapeId: currentShape() ?? SHAPE_ID });
-		ctx.ui.setEditorComponent(factory);
-		// The host assigns composerFacts during setEditorComponent's shape sync.
-		attachFolioProviderStatus(editor?.composerFacts, {
-			shape: currentShape,
-			provider: () => context?.model?.provider,
-			accentColor,
-		});
-	};
-
 	pi.on("session_start", (_event, ctx) => {
 		if (!ctx.hasUI || ctx.agent.kind !== "main") return;
 		context = ctx;
-		editor = undefined;
 		stopped = false;
-		installEditor(ctx);
+		request++;
+		inFlightKey = undefined;
+		detachStatus?.();
+		detachStatus = attachProviderStatus(provider);
+		// A panel painted before session_start still has its original cached block.
+		// A transient status entry invalidates its children so it picks up the painter.
+		ctx.ui.setStatus("omp-folio", "◇");
+		ctx.ui.setStatus("omp-folio", undefined);
+		const syncShape = () => {
+			const id = currentShape();
+			// Prepaint may have cached the box fallback for this same id. Applying
+			// Folio's explicit padding invalidates the host's measured field.
+			if (id && isFolioShape(id)) ctx.ui.composer?.setShape(id, 1);
+			ctx.ui.setWidget("omp-folio-capline", id === CAPLINE_SHAPE_ID
+				? () => caplineWidget(view) : undefined, { placement: "aboveEditor" });
+			if (enabled()) void refresh();
+			else provider.set(undefined);
+		};
 		stopShapeListener?.();
-		stopShapeListener = shape?.listen(pi.pi.settings, () => {
-			installEditor(ctx);
-			repaint();
-		});
+		stopShapeListener = shape?.listen(pi.pi.settings, syncShape);
+		// 19.2.1 has no extension event for session-only model switches.
+		// Compare just the active model here; account and usage reads stay on refresh.
+		let previousModel = ctx.model;
+		ctx.setInterval(() => {
+			const model = ctx.model;
+			if (model?.provider === previousModel?.provider && model?.id === previousModel?.id) return;
+			previousModel = model;
+			void refresh();
+		}, 200);
 		ctx.setInterval(() => { void refresh(); }, 30_000);
-		void refresh();
+		syncShape();
 	});
 	pi.on("agent_start", () => { void refresh(); });
 	pi.on("agent_end", () => { void refresh(); });
@@ -138,9 +117,8 @@ export default function composerFolio(pi: ExtensionAPI): void {
 		request++;
 		stopShapeListener?.();
 		stopShapeListener = undefined;
-		// Keep the editor and context until the host's final history flush: the
-		// style stays registered, so the last frame retains the selected Folio chrome
-		// instead of falling back to box.
-		wrapped = false;
+		provider.set(undefined);
+		detachStatus?.();
+		detachStatus = undefined;
 	});
 }

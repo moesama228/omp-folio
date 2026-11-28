@@ -359,7 +359,16 @@ async function readDeepSeekBalance(
 	}
 }
 
-/** Reads only the host's usage API/cache or the provider's documented balance endpoint. */
+/** 19.2.1 rewrites the literal first-party inference base to the retired /zen/go endpoint.
+ * An explicit default HTTPS port keeps the official origin and bypasses that legacy alias.
+ * Leave custom gateways and every other provider's resolver untouched.
+ */
+export function usageBaseUrl(provider: string, configured: string | undefined): string | undefined {
+	if (provider !== "opencode-go") return configured;
+	if (configured && URL.parse(configured)?.origin !== "https://opencode.ai") return configured;
+	return "https://opencode.ai:443/inference/go";
+}
+
 export async function readQuota(ctx: ExtensionContext): Promise<QuotaSnapshot> {
 	let key = quotaContextKey(ctx);
 	try {
@@ -369,7 +378,8 @@ export async function readQuota(ctx: ExtensionContext): Promise<QuotaSnapshot> {
 		if (!provider || !modelId) return { key, state: "unknown", entries: [] };
 		if (provider === "deepseek") return readDeepSeekBalance(ctx, key, sessionId);
 		const reports = await ctx.modelRegistry.authStorage.usage.reports({
-			baseUrlResolver: provider => ctx.modelRegistry.getProviderBaseUrl(provider),
+			provider,
+			baseUrlResolver: id => usageBaseUrl(id, ctx.modelRegistry.getProviderBaseUrl(id)),
 		});
 		const relevant = (reports ?? []).filter(report => report.provider === provider && Number.isFinite(report.fetchedAt));
 		const apiKeyUsage = provider === "cursor" || provider === "devin" || provider === "opencode-go";

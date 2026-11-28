@@ -1,12 +1,12 @@
 # AGENTS.md
 
-Guidance for changes in **omp Folio**, an omp `Composer Shape` plugin. Target is omp **18.12.6**; the host binary is not modified.
+Guidance for changes in **omp Folio**, an omp `Composer Shape` plugin. Target is omp **19.2.1**; the host binary is not modified.
 
 ## Non-negotiables
 
 - Use omp's public host APIs and existing `pi-tui` components. Do not fork or patch omp.
 - Never reimplement editing, keybindings, history, completion, paste, IME, scrolling, Git status, or usage fetching.
-- `src/editor.ts` only decorates the real `CustomEditor`. The native status bar remains the single source for model, mode, path, Git, PR, context, cost, and session name.
+- `src/editor.ts` uses quota renderers and a Capline widget around the built-in composer. The native status bar remains the single source for model, mode, path, Git, PR, context, cost, and session name.
 - Do not pin `composer.shape` in a project `.omp/config.yml`; the project layer overrides the Appearance menu. Use the global setting.
 - Keep README text-and-icon only. No screenshots, banners, or generated assets.
 - Treat `.omp/` as local project state; it is gitignored. The tracked plugin entry is `package.json`'s `omp.extensions`.
@@ -15,19 +15,16 @@ Guidance for changes in **omp Folio**, an omp `Composer Shape` plugin. Target is
 
 ## Shape lifecycle
 
-- `src/register.ts` installs `installExtensionComposerShape` at module evaluation, bypassing `pi.registerComposerShape`.
-  - This makes the first interactive frame use the selected Folio style.
-  - The host's stop-time disposer only removes its own registration, so the final history flush still renders the selected Folio style.
-  - A no-op file-write fallback keeps the extension on the eager startup path. It always returns `false`; do not replace it with real write behavior.
+- Register each shape with `pi.registerComposerShape` during extension initialization. The host owns registration and disposal.
 - `SHAPE_ID = "omp-composer-folio-gutter"`; additional stable ids are `GAUGE_SHAPE_ID = "omp-composer-folio-gauge"` and `CAPLINE_SHAPE_ID = "omp-composer-folio-capline"`. The only legacy id is `omp-composer-dock`, used for one-time migration in `index.ts`. Keep existing ids stable; future styles use new ids.
 - Host prepaint still paints an unknown shape as `box` before extensions load. That frame cannot be removed plugin-side; do not work around it by modifying omp.
-- Registering the same style through both `installExtensionComposerShape` and `pi.registerComposerShape` throws on duplicate installation. Keep the direct-install path.
 
 ## Layout
 
-- `src/shape.ts`: all Folio styles use the host `rail` surface, `bottomBar: "full"`, and `statusAttachment: "none"`. Gutter/Gauge have `verticalChrome: 2` with blank rails above and below; Capline has `verticalChrome: 1` for its bottom blank rail, with top spacing supplied by the editor decorator before the quota.
-- `src/provider-status.ts`: append `◇ <provider>` at the far right of the native bottom status bar only for Folio. Decorate the existing public `renderBottomBar` instance obtained from `editor.composerFacts`; native rendering owns all segments and width reduction. No custom footer or replacement status implementation. Keep the badge within one third of the width (at most 28 columns), and omit it below 24 columns.
-- `src/editor.ts`: Gutter/Gauge split at `>= 88` columns with a 22–26 column quota rail; below 88 or with `tui.imeSafeCursor`, stack it under the input. Capline renders quota below the top blank rail and above the full-width input, with two columns of right padding on every row. It wraps complete entries; an individually oversized entry is column-wrapped without losing content.
+- Use the 19.2.1 ComposerShape row and surface hooks with a full native bottom bar. Keep the host-calculated cursor coordinates.
+- Gutter/Gauge use the last input row's trailing space at 88 columns and above. Stack when fewer than 22–26 cells plus the gap remain, on narrow screens, or in IME-safe mode.
+- Capline uses an above-editor widget with a blank rail, complete-entry wrapping and two columns of right padding.
+- Decorate the native terminal status panel and reserve the far right of its bar for the provider. Preserve other hook rows and the native segment painter and hit targets. Keep the badge within one third of the width (at most 28 columns) and omit it below 24 columns.
 - The quota rail and capline are quota-only. Do not add model, context, cost, or project segments there; the native status bar owns them.
 - No vertical divider. Quota content is right-aligned; icon color uses the same session accent as the left rail.
 - `QuotaPanel` rules:
@@ -36,7 +33,7 @@ Guidance for changes in **omp Folio**, an omp `Composer Shape` plugin. Target is
   - Percentage is **remaining**, not used: `100%` = full, `0%` = empty. `<=25%` warning, `<=10%` error.
   - Gauge draws at most 10 cells only for known percentages; normal meters use accent, low meters use warning/error. Balances and unknown states have no meter.
   - Unknown, stale, ambiguous, or failed states use a short icon + word; never invent a percentage.
-- The left rail follows `statusLine.sessionAccent` via `getSessionAccentHex`; when disabled or unnamed, fall back to theme `accent`. Wrap `CustomEditor.setTheme` so host shape/settings sync cannot overwrite it.
+- For named sessions with session accents enabled, use the host border painter for input rails. Otherwise use the theme accent. Capline widget rails and icons use the theme accent.
 
 ## Quota data
 
@@ -49,15 +46,15 @@ Guidance for changes in **omp Folio**, an omp `Composer Shape` plugin. Target is
   - Multiple unpinned accounts remain `unknown`; never sum accounts.
   - Cursor/Devin API-key reports are accepted only when all reports share one identity.
 - DeepSeek has no `UsageReport`: call `GET /user/balance`, display absolute currency (`¥42.00`), cache success for 5 minutes and failure for 30 seconds. Never log the key, response body, or identity.
-- Refresh on `session_start`, `agent_start`, `agent_end`, `turn_end`, and a 30-second managed timer. Drop stale async results when provider/model/session/account changes.
+- Refresh promptly on model changes using provider-scoped reports, on `session_start`, `agent_start`, `agent_end`, `turn_end`, and a 30-second managed timer. Drop stale async results when provider/model/session/account changes.
 - Mark data stale after 10 minutes; never refresh from inside `render`.
 
 ## Repository rules
 
 - `index.ts`: wiring, lifecycle, migration, async quota refresh.
-- `src/register.ts`: idempotent shape registration.
-- `src/shape.ts`: ComposerStyle.
-- `src/editor.ts`: editor/rail decoration.
+- `src/register.ts`: extension-owned shape registration.
+- `src/shape.ts`: ComposerShape definitions.
+- `src/editor.ts`: quota rows and Capline widget.
 - `src/quota-panel.ts`: shared visual quota layouts.
 - `src/quota.ts`: usage-provider adaptation and DeepSeek balance.
 - `src/types.ts`: shared quota types.

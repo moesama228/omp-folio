@@ -1,43 +1,48 @@
-import { fgOrPlain, padding, truncateToWidth, visibleWidth } from "@oh-my-pi/pi-tui";
-import { sanitizeDisplaySingleLine } from "@oh-my-pi/pi-tui/overlays/extensions/display-text";
-import type { StatusLineComponent } from "@oh-my-pi/pi-tui/status-line/component";
-import { isFolioShape } from "./shape.ts";
+import { sanitizeDisplaySingleLine } from "@oh-my-pi/pi-coding-agent/extensibility/inventory/display-text";
+import type { StatusPanelLook } from "@oh-my-pi/pi-coding-agent/ui/status/status-line";
+import { stack } from "@oh-my-pi/pi-tui/term/painters/layout";
+import { UiNode } from "@oh-my-pi/pi-tui";
+import { defineRolePainter, painterFor, type Painter } from "@oh-my-pi/pi-tui/term/paint";
+import { truncate, visibleWidth } from "@oh-my-pi/pi-tui/text/width";
 
-interface ProviderStatusOptions {
-	shape(): string | undefined;
-	provider(): string | undefined;
-	accentColor(text: string): string;
+export function providerStatus(provider: string | undefined, width: number): string | undefined {
+	const name = sanitizeDisplaySingleLine(provider ?? "").trim();
+	if (!name || width < 24) return undefined;
+	return "◇ " + truncate(name, Math.min(28, Math.floor(width / 3)) - 2);
 }
 
-type BottomBar = Pick<StatusLineComponent, "renderBottomBar">;
-const DECORATION = Symbol.for("omp-folio.provider-status");
-type DecoratedBar = BottomBar & { [DECORATION]?: { options: ProviderStatusOptions } };
-
-/** Decorate the real status instance; the host still selects, fetches and renders every native segment. */
-export function attachFolioProviderStatus(source: unknown, options: ProviderStatusOptions): void {
-	if (!source || typeof source !== "object" || !("renderBottomBar" in source)
-		|| typeof source.renderBottomBar !== "function") return;
-	const bar = source as DecoratedBar;
-	const previous = bar[DECORATION];
-	if (previous) {
-		previous.options = options;
-		return;
+/** Reserve space only on the native panel's bar. Its painter still lays out every segment and click target. */
+export function attachProviderStatus(provider: () => string | undefined): () => void {
+	const probe = new UiNode("col", { role: "omp.status.panel" });
+	const native = painterFor(probe);
+	if (!native) {
+		probe.dispose();
+		return () => {};
 	}
-	const state = { options };
-	bar[DECORATION] = state;
-	const renderNative = bar.renderBottomBar.bind(bar);
-	bar.renderBottomBar = (width, groups, previewTitle) => {
-		const current = state.options;
-		const provider = sanitizeDisplaySingleLine(current.provider() ?? "").trim();
-		if (!isFolioShape(current.shape()) || groups !== "full" || !provider || width < 24) {
-			return renderNative(width, groups, previewTitle);
-		}
-		// Keep the identity secondary and bounded; native segment priorities handle
-		// the remaining width, including path shortening and low-priority elision.
-		const budget = Math.min(28, Math.floor(width / 3));
-		const label = current.accentColor("◇") + " " + fgOrPlain("muted", truncateToWidth(provider, budget - 2));
-		const labelWidth = visibleWidth(label);
-		const native = renderNative(width - labelWidth - 3, groups, previewTitle);
-		return native + padding(Math.max(2, width - visibleWidth(native) - labelWidth - 1)) + label + " ";
+	const paint: Painter = (node, cx) => {
+		const activeProvider = provider();
+		if (!activeProvider) return native(node, cx);
+		const placement = (node.props() as { term?: StatusPanelLook }).term?.placement;
+		const bar = node.children().find(child => child.kind === "status" && child.key() === "bar");
+		if (!bar || placement?.autocomplete) return native(node, cx);
+		const badge = providerStatus(activeProvider, cx.width);
+		const paintBar = () => {
+			if (!badge) return cx.paint(bar, cx.width);
+			const badgeWidth = visibleWidth(badge);
+			const block = cx.paint(bar, cx.width - badgeWidth - 4);
+			const row = block.rows[0] ?? "";
+			const gap = Math.max(2, cx.width - visibleWidth(row) - badgeWidth - 2);
+			return { ...block, rows: [row + " ".repeat(gap) + cx.theme.fg("muted", badge) + "  "] };
+		};
+		// On startup placement can still reflect prepaint's box until autocomplete
+		// first opens. All Folio shapes request the native full bar.
+		if (placement?.bar === "none") return stack([paintBar(), native(node, cx)], 0);
+		return native(node, { ...cx, paint: (child, width, height) =>
+			child === bar ? paintBar() : cx.paint(child, width, height) });
+	};
+	defineRolePainter("col", "omp.status.panel", paint);
+	return () => {
+		if (painterFor(probe) === paint) defineRolePainter("col", "omp.status.panel", native);
+		probe.dispose();
 	};
 }

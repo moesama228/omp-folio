@@ -1,37 +1,21 @@
 import { expect, test } from "bun:test";
-import { getComposerStyle } from "@oh-my-pi/pi-tui/components/composer/registry";
-import { getComposerShapeOptions } from "@oh-my-pi/pi-tui/overlays/composer-shape-registry";
-import { ensureFolioShape } from "./register";
+import { composerShape, registerComposerShape } from "@oh-my-pi/pi-coding-agent/ui/styles/composer/shapes";
+import { registerFolio } from "./register";
 import { CAPLINE_SHAPE_ID, GAUGE_SHAPE_ID, SHAPE_ID } from "./shape";
 
-test("Folio shapes install once in both selector and renderer registries", () => {
-	ensureFolioShape();
-	ensureFolioShape();
-	const options = getComposerShapeOptions();
-	for (const id of [SHAPE_ID, GAUGE_SHAPE_ID, CAPLINE_SHAPE_ID]) {
-		expect(options.filter(option => option.value === id)).toHaveLength(1);
-		expect(getComposerStyle(id).id).toBe(id);
+test("host registration and disposal support reloading every Folio shape", () => {
+	const ids = [SHAPE_ID, GAUGE_SHAPE_ID, CAPLINE_SHAPE_ID];
+	for (let load = 0; load < 2; load++) {
+		const disposers: (() => void)[] = [];
+		registerFolio({ registerComposerShape(shape) { disposers.push(registerComposerShape(shape)); } }, {
+			quota: () => ({ key: "", state: "unknown", entries: [] }),
+			accent: text => text, imeSafe: () => false, sessionAccent: () => false,
+		});
+		try {
+			for (const id of ids) expect(composerShape(id).id).toBe(id);
+		} finally {
+			for (const dispose of disposers) dispose();
+		}
+		for (const id of ids) expect(composerShape(id).id).toBe("box");
 	}
-});
-
-test("Folio shapes preserve native status and their vertical chrome contracts", () => {
-	const chrome = {
-		width: 20,
-		accentColor: (text: string) => text,
-		surfaceColor: (text: string) => text,
-	};
-	for (const id of [SHAPE_ID, GAUGE_SHAPE_ID]) {
-		const style = getComposerStyle(id);
-		expect(style.verticalChrome).toBe(2);
-		expect(style.statusAttachment).toBe("none");
-		expect(style.bottomBar).toBe("full");
-		expect(style.renderTop(chrome as never)).toBeDefined();
-		expect(style.renderBottom(chrome as never)).toBeDefined();
-	}
-	const capline = getComposerStyle(CAPLINE_SHAPE_ID);
-	expect(capline.verticalChrome).toBe(1);
-	expect(capline.statusAttachment).toBe("none");
-	expect(capline.bottomBar).toBe("full");
-	expect(capline.renderTop(chrome as never)).toBeUndefined();
-	expect(capline.renderBottom(chrome as never)).toBeDefined();
 });

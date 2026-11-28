@@ -9,7 +9,7 @@ import {
 	type UsageReport,
 } from "@oh-my-pi/pi-ai";
 import type { ExtensionContext } from "@oh-my-pi/pi-coding-agent";
-import { quotaContextKey, readQuota } from "./quota";
+import { quotaContextKey, readQuota, usageBaseUrl } from "./quota";
 
 const account: OAuthAccountSummary = {
 	position: 0,
@@ -196,23 +196,33 @@ function devin(): UsageReport {
 	};
 }
 
-async function opencodeGo(): Promise<UsageReport> {
+async function opencodeGo(configured?: string): Promise<UsageReport> {
 	// Exercise the host's real decoder; Folio must not implement usage fetching.
 	const report = await opencodeGoUsageProvider.fetchUsage({
 		provider: "opencode-go",
 		credential: { type: "api_key", apiKey: "test-go-key" },
+		baseUrl: usageBaseUrl("opencode-go", configured),
 	}, {
-		fetch: async () => new Response(JSON.stringify({ usage: {
-			rolling: { status: "ok", percent: 0, resetsAt: new Date(fetchedAt + hour).toISOString() },
-			weekly: { status: "ok", percent: 25, resetsAt: new Date(fetchedAt + 24 * hour).toISOString() },
-			monthly: { status: "rate-limited", percent: 100, resetsAt: new Date(fetchedAt + 10 * 24 * hour).toISOString() },
-		} })),
+		fetch: async url => {
+			const expected = configured === "https://gateway.example/proxy" ? configured : "https://opencode.ai/inference/go";
+			expect(new URL(String(url)).href).toBe(expected + "/v1/usage");
+			return new Response(JSON.stringify({ usage: {
+				rolling: { status: "ok", percent: 0, resetsAt: new Date(fetchedAt + hour).toISOString() },
+				weekly: { status: "ok", percent: 25, resetsAt: new Date(fetchedAt + 24 * hour).toISOString() },
+				monthly: { status: "rate-limited", percent: 100, resetsAt: new Date(fetchedAt + 10 * 24 * hour).toISOString() },
+			} }));
+		},
 	});
 	if (!report) throw new Error("Expected a host OpenCode Go usage report");
 	return report;
 }
 
 describe("subscription remaining quota", () => {
+	test("the Go usage provider resolves first-party model routes and preserves gateway prefixes", async () => {
+		await opencodeGo("https://opencode.ai/inference/systemone");
+		await opencodeGo("https://gateway.example/proxy");
+	});
+
 	test("OpenCode Go API-key usage keeps all three real windows including monthly", async () => {
 		const report = await opencodeGo();
 		expect(report.limits[2].window?.durationMs).toBeUndefined();

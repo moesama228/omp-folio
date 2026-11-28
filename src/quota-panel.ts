@@ -1,28 +1,17 @@
-import {
-	Ellipsis,
-	fgOrPlain,
-	getWidthConfigEpoch,
-	theme,
-	truncateToWidth,
-	visibleWidth,
-	wrapLiteralLine,
-} from "@oh-my-pi/pi-tui";
+import { truncate, visibleWidth, widthEpoch, wrapChars } from "@oh-my-pi/pi-tui/text/width";
+import { currentTheme } from "@oh-my-pi/pi-tui/theme/runtime";
 import type { QuotaEntry, QuotaSnapshot } from "./types.ts";
 
 const STALE_AFTER_MS = 10 * 60 * 1_000;
 
-const muted = (text: string): string => fgOrPlain("muted", text);
-const normal = (text: string): string => fgOrPlain("text", text);
-const warning = (text: string): string => fgOrPlain("warning", text);
-const error = (text: string): string => fgOrPlain("error", text);
-const emphasize = (text: string): string => {
-	const bold = (theme as unknown as { bold?: (value: string) => string } | undefined)?.bold;
-	return bold ? bold(normal(text)) : normal(text);
-};
+const muted = (text: string): string => currentTheme().fg("muted", text);
+const normal = (text: string): string => currentTheme().fg("text", text);
+const warning = (text: string): string => currentTheme().fg("warning", text);
+const error = (text: string): string => currentTheme().fg("error", text);
+const emphasize = (text: string): string => currentTheme().style("strong", text);
 
 function icon(name: "time" | "cost" | "warning", fallback: string): string {
-	const icons = (theme as unknown as { icon?: Partial<Record<typeof name, string>> } | undefined)?.icon;
-	return icons?.[name] || fallback;
+	return currentTheme().symbols.icon(name) || fallback;
 }
 
 function costIcon(): string {
@@ -118,7 +107,8 @@ export class QuotaPanel {
 
 	render(width: number): readonly string[] {
 		const renderWidth = Number.isFinite(width) ? Math.max(1, Math.trunc(width)) : 1;
-		const epoch = getWidthConfigEpoch();
+		const epoch = widthEpoch();
+		const theme = currentTheme();
 		const stale = isStale(this.#snapshot);
 		const accentSample = this.#accent("");
 		if (this.#cache?.width === renderWidth && this.#cache.epoch === epoch
@@ -126,14 +116,14 @@ export class QuotaPanel {
 			&& this.#cache.accent === accentSample) {
 			return this.#cache.source;
 		}
-		const lines = this.#renderLines(renderWidth).flatMap(line => wrapLiteralLine(line, renderWidth));
+		const lines = this.#renderLines(renderWidth).flatMap(line => wrapChars(line, renderWidth));
 		const blockWidth = this.#mode === "capline" ? 0 : Math.max(0, ...lines.map(line => visibleWidth(line)));
 		const aligned = lines.map(line => {
 			const contentWidth = this.#mode === "capline" ? visibleWidth(line) : blockWidth;
 			return " ".repeat(Math.max(0, renderWidth - contentWidth)) + line;
 		});
 		const clipped = aligned.map(line => visibleWidth(line) > renderWidth
-			? truncateToWidth(line, renderWidth, Ellipsis.Omit)
+			? truncate(line, renderWidth, "")
 			: line);
 		this.#cache = { width: renderWidth, epoch, theme, stale, accent: accentSample, source: clipped };
 		return clipped;
@@ -178,11 +168,13 @@ export class QuotaPanel {
 		const { entries, prefix, prefixWidth } = this.#format();
 		if (entries.length === 0) return [this.#emptyLine(prefix), ...this.#additionalLines()];
 		const labelWidth = Math.max(0, ...entries.map(entry => visibleWidth(entry.label)));
+		const valueWidth = Math.max(...entries.map(entry => visibleWidth(entry.value)));
 		return [
 			...entries.map((entry, index) => {
 				const lead = index === 0 ? prefix : " ".repeat(prefixWidth);
 				const label = entry.label ? `${muted(entry.label + " ".repeat(Math.max(0, labelWidth - visibleWidth(entry.label))))} ` : "";
-				return `${lead}${label}${entry.value}`;
+				const value = " ".repeat(valueWidth - visibleWidth(entry.value)) + entry.value;
+				return `${lead}${label}${value}`;
 			}),
 			...this.#additionalLines(),
 		];
